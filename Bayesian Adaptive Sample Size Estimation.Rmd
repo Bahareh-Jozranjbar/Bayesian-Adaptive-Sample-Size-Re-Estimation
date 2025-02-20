@@ -1,0 +1,175 @@
+---
+title: "Bayesian Adaptive Sample Size Re-Estimation"
+author: "Bahareh Jozranjbar"
+date: "2025-02-19"
+output: html_document
+---
+
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Set seed for reproducibility
+set.seed(42)
+
+# Define parameters
+initial_sample_size <- 30
+max_sample_size <- 160
+threshold <- 5  # Stopping criteria
+
+# **Updated Variance Simulation** (Starts Above Threshold and Drops Below It)
+sample_sizes <- seq(initial_sample_size, max_sample_size, by = 15)
+variance_estimates <- 8 - (6 * sqrt(sample_sizes) / sqrt(max(sample_sizes)))  # Adjusted variance function
+
+# Create a data frame
+data <- data.frame(
+  SampleSize = sample_sizes,
+  Variance = variance_estimates
+)
+
+# Identify stopping point where variance falls below the threshold
+stop_index <- min(which(data$Variance <= threshold))
+if (length(stop_index) == 0) { stop_index <- nrow(data) }  # Ensure there's always a stopping point
+stop_point <- data[stop_index,]
+
+# Custom theme
+custom_theme <- theme_minimal(base_size = 26) +  
+  theme(
+    plot.title = element_text(size = 30, face = "bold"),  
+    axis.title.x = element_text(size = 28, face = "bold"), 
+    axis.title.y = element_text(size = 28, face = "bold"), 
+    axis.text = element_text(size = 24),  
+    plot.background = element_rect(fill = "transparent", color = NA),
+    legend.text = element_text(size = 22),
+    legend.position = "bottom"
+  )
+
+# ✅ **1. Initial Variability in Early Data**
+plot1 <- ggplot(data, aes(x = SampleSize, y = Variance)) +
+  geom_line(color = "#1F77B4", size = 2) +  
+  geom_point(color = "#1F77B4", size = 6) +
+  annotate("text", x = initial_sample_size + 10, y = variance_estimates[1] + 0.5, 
+           label = "High initial variance", size = 7, color = "red", fontface = "bold") +
+  labs(
+    title = "High Variability in Early Data",
+    x = "Sample Size",
+    y = "Variance Estimate"
+  ) +
+  custom_theme
+ggsave("plot1_initial_variability.png", plot1, bg = "transparent", width = 12, height = 7)
+
+# ✅ **2. Variance Stabilization Over Time**
+plot2 <- ggplot(data, aes(x = SampleSize, y = Variance)) +
+  geom_line(color = "#1F77B4", size = 2) +
+  geom_point(color = "#1F77B4", size = 6) +
+  annotate("text", x = max_sample_size * 0.7, y = min(variance_estimates) + 0.5, 
+           label = "Variance stabilizes", size = 7, color = "blue", fontface = "bold") +
+  labs(
+    title = "Variance Stabilizes With More Data",
+    x = "Sample Size",
+    y = "Variance Estimate"
+  ) +
+  custom_theme
+ggsave("plot2_variance_stabilization.png", plot2, bg = "transparent", width = 12, height = 7)
+
+# ✅ **3. Adaptive Sample Size Decision**
+plot3 <- ggplot(data, aes(x = SampleSize, y = Variance)) +
+  geom_line(aes(color = "AdaptiveSample"), size = 2) +
+  geom_point(aes(color = "AdaptiveSample"), size = 6) +
+  geom_hline(yintercept = threshold, linetype = "dashed", color = "red", size = 2) +
+  annotate("text", x = max_sample_size * 0.75, y = threshold + 0.5, 
+           label = "Stopping threshold", size = 7, color = "red", fontface = "bold") +
+  scale_color_manual(values = c("AdaptiveSample" = "blue")) +
+  labs(
+    title = "Adaptive Decision: Adjusting Sample Size",
+    x = "Sample Size",
+    y = "Variance Estimate",
+    color = "Sampling Method"
+  ) +
+  custom_theme
+ggsave("plot3_adaptive_sample_size.png", plot3, bg = "transparent", width = 12, height = 7)
+
+# ✅ **4. Final Decision: Stopping at Optimal Point**
+plot4 <- ggplot(data, aes(x = SampleSize, y = Variance)) +
+  geom_line(aes(color = "AdaptiveSample"), size = 2) +
+  geom_point(aes(color = "AdaptiveSample"), size = 6) +
+  geom_hline(yintercept = threshold, linetype = "dashed", color = "red", size = 2) +
+  geom_point(data = stop_point, aes(x = SampleSize, y = Variance), color = "red", size = 10) +
+  annotate("text", x = stop_point$SampleSize + 10, y = stop_point$Variance + 0.3, 
+           label = "Optimal stopping point", size = 7, color = "red", fontface = "bold") +
+  scale_color_manual(values = c("AdaptiveSample" = "blue")) +
+  labs(
+    title = "Final Decision: Stopping at Optimal Point",
+    x = "Sample Size",
+    y = "Variance Estimate",
+    color = "Sampling Method"
+  ) +
+  custom_theme
+ggsave("plot4_final_decision.png", plot4, bg = "transparent", width = 12, height = 7)
+
+# ✅ **5. Adaptive vs Fixed Sampling Comparison**
+sample_sizes_fixed <- rep(150, length(sample_sizes))  
+adaptive_sample_sizes <- cumsum(rep(10, length(sample_sizes)))  
+adaptive_sample_sizes[adaptive_sample_sizes > 130] <- 130  
+
+comparison_data <- data.frame(
+  SampleSize = sample_sizes,
+  Fixed = sample_sizes_fixed,
+  Adaptive = adaptive_sample_sizes
+)
+
+plot5 <- ggplot(comparison_data, aes(x = SampleSize)) +
+  geom_line(aes(y = Fixed, color = "FixedSample"), size = 2) +
+  geom_point(aes(y = Fixed, color = "FixedSample"), size = 6) +
+  geom_line(aes(y = Adaptive, color = "AdaptiveSample"), size = 2) +
+  geom_point(aes(y = Adaptive, color = "AdaptiveSample"), size = 6) +
+  geom_hline(yintercept = 130, linetype = "dashed", color = "gray", size = 2) +
+  scale_color_manual(values = c("FixedSample" = "red", "AdaptiveSample" = "blue")) +
+  labs(
+    title = "Adaptive vs Fixed Sample Sizes",
+    x = "Data Collection Iterations",
+    y = "Sample Size Used",
+    color = "Sampling Method"
+  ) +
+  custom_theme
+
+ggsave("plot5_adaptive_vs_fixed.png", plot5, bg = "transparent", width = 12, height = 7)
+
+# ✅ **6. Final Summary Plot**
+summary_data <- data.frame(
+  SampleSize = sample_sizes,
+  Fixed = sample_sizes_fixed,
+  Adaptive = adaptive_sample_sizes
+)
+
+plot6 <- ggplot(summary_data, aes(x = SampleSize)) +
+  geom_line(aes(y = Fixed, color = "FixedSample"), size = 2) +
+  geom_point(aes(y = Fixed, color = "FixedSample"), size = 6) +
+  geom_line(aes(y = Adaptive, color = "AdaptiveSample"), size = 2) +
+  geom_point(aes(y = Adaptive, color = "AdaptiveSample"), size = 6) +
+  scale_color_manual(values = c("FixedSample" = "red", "AdaptiveSample" = "blue")) +
+  labs(
+    title = "Efficiency of Adaptive Sampling",
+    x = "Sample Size",
+    y = "Efficiency",
+    color = "Sampling Method"
+  ) +
+  custom_theme
+
+ggsave("plot6_efficiency.png", plot6, bg = "transparent", width = 12, height = 7)
+
+# Confirm plots were saved
+message("✅ Updated Plots Saved:
+- plot1_initial_variability.png 
+- plot2_variance_stabilization.png 
+- plot3_adaptive_sample_size.png 
+- plot4_final_decision.png
+- plot5_adaptive_vs_fixed.png
+- plot6_efficiency.png")
+
+
+```
+
